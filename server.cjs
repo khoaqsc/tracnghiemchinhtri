@@ -40,7 +40,12 @@ function loadBanks() {
   if (import_fs.default.existsSync(BANKS_FILE)) {
     try {
       const content = import_fs.default.readFileSync(BANKS_FILE, "utf-8");
-      savedBanksCache = JSON.parse(content);
+      const parsed = JSON.parse(content);
+      if (Array.isArray(parsed)) {
+        savedBanksCache = { banks: parsed, updatedAt: Date.now() };
+      } else if (parsed && Array.isArray(parsed.banks)) {
+        savedBanksCache = { banks: parsed.banks, updatedAt: parsed.updatedAt || Date.now() };
+      }
       return savedBanksCache;
     } catch (err) {
       console.error("Error reading banks.json:", err);
@@ -48,32 +53,36 @@ function loadBanks() {
   }
   return null;
 }
-function saveBanks(banks) {
-  savedBanksCache = banks;
+function saveBanks(banks, updatedAt) {
+  const ts = updatedAt || Date.now();
+  const data = { banks, updatedAt: ts };
+  savedBanksCache = data;
   try {
-    import_fs.default.writeFileSync(BANKS_FILE, JSON.stringify(banks, null, 2), "utf-8");
+    import_fs.default.writeFileSync(BANKS_FILE, JSON.stringify(data, null, 2), "utf-8");
   } catch (err) {
     console.error("Error writing banks.json:", err);
   }
 }
 var shareStore = {};
 app.get("/api/banks", (req, res) => {
-  const banks = loadBanks();
+  const data = loadBanks();
   res.json({
     success: true,
-    banks: banks || null
+    banks: data ? data.banks : null,
+    updatedAt: data ? data.updatedAt : 0
   });
 });
 app.post("/api/banks", (req, res) => {
-  const { banks } = req.body;
+  const { banks, updatedAt } = req.body;
   if (!Array.isArray(banks)) {
     return res.status(400).json({ success: false, error: "Danh s\xE1ch ng\xE2n h\xE0ng kh\xF4ng h\u1EE3p l\u1EC7" });
   }
-  saveBanks(banks);
+  const ts = typeof updatedAt === "number" ? updatedAt : Date.now();
+  saveBanks(banks, ts);
   res.json({
     success: true,
     message: "\u0110\xE3 l\u01B0u th\xE0nh c\xF4ng l\xEAn m\xE1y ch\u1EE7! M\u1ECDi thi\u1EBFt b\u1ECB k\u1EBFt n\u1ED1i \u0111\u1EC1u c\xF3 th\u1EC3 xem d\u1EEF li\u1EC7u n\xE0y.",
-    updatedAt: (/* @__PURE__ */ new Date()).toISOString()
+    updatedAt: new Date(ts).toISOString()
   });
 });
 app.post("/api/share", (req, res) => {
